@@ -1,0 +1,50 @@
+# Instalar Samba y sus dependencias
+sudo dnf install samba samba-client samba-common -y
+
+# Habilitar y arrancar los servicios de Samba
+sudo systemctl enable --now smb
+sudo systemctl enable --now nmb
+
+# Crear el directorio compartido y establecer permisos
+sudo mkdir -p /srv/samba/adrianes
+sudo chmod -R 777 /srv/samba/adrianes
+sudo chown nobody:nobody /srv/samba/adrianes
+sudo chcon -t samba_share_t /srv/samba/adrianes
+
+# Crear archivos de prueba en el directorio compartido
+cd /srv/samba/adrianes/ || exit
+sudo touch adrian{1..100}.txt
+
+# Configurar firewall para permitir tráfico Samba
+sudo firewall-cmd --add-service=samba --permanent
+sudo firewall-cmd --reload
+
+# Configurar el archivo smb.confpp
+sudo bash -c 'cat <<EOF >> /etc/samba/smb.conf
+
+[public]
+    path = /srv/samba/adrianes
+    browsable = yes
+    writable = yespp
+    guest ok = yes
+    read only = no
+EOF'
+
+# Crear grupo y usuario Samba con contraseña
+sudo groupadd -f sambausers
+sudo useradd -m -G sambausers papolo
+echo "papolo:12345" | sudo chpasswd
+echo -e "12345\n12345" | sudo smbpasswd -a papolo
+
+# Verificar grupos del usuario
+groups papolo
+
+# Reiniciar servicios para aplicar cambios
+sudo systemctl restart smb nmb
+
+
+ls -ld /srv/samba/adrianes
+sudo chmod -R 777 /srv/samba/adrianes
+sudo chown -R nobody:nobody /srv/samba/adrianes
+
+el zumzum de la carabela
