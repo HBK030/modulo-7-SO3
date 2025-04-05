@@ -16,7 +16,7 @@ ls
 cd /etc/exports.d/
 nano /etc/exports
 
-/var/nfs/so3 192.168.175.129(rw,sync,no_subtree_check)
+/var/nfs/so3 IP_Host(rw,sync,no_subtree_check)
 
 sudo exportfs -arv
 
@@ -26,14 +26,14 @@ sudo firewall-cmd --permanent --add-service=mountd
 sudo firewall-cmd --reload
 
 --------cliente----------
-showmount -e 192.168.175.130
+showmount -e IP_Cliente
 mkdir -p /nfs/so3
-sudo mount 192.168.175.130:/var/nfs/so3 /nfs/so3
+sudo mount IP_Cliente:/var/nfs/so3 /nfs/so3
 df -h
 cd /nfs/so3/
 ls
 nano /etc/fstab
-192.168.175.130:/var/nfs/so3 /nfs/so3 nfs auto,nofail,noatime,nolock,intr,tcp,actimeo=1800 0 0
+IP_Cliente:/var/nfs/so3 /nfs/so3 nfs auto,nofail,noatime,nolock,intr,tcp,actimeo=1800 0 0
 reboot
 
 
@@ -42,7 +42,7 @@ chmod 766 /var/nfs/so3/
 chown nobody:nobody /var/nfs/so3/
 
 ------------cliente------------------
-ssh 2024-1913@192.168.175.130
+ssh 2024-1913@IP_Cliente
 sudo su
 cd /var/nfs/so3/
 ls
