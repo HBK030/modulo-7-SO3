@@ -1,0 +1,111 @@
+
+
+# Contenido completo de la guía con correcciones y ajustes solicitados
+samba_guide = """
+INSTALACIÓN Y CONFIGURACIÓN DE SAMBA COMO CONTROLADOR DE DOMINIO ACTIVE DIRECTORY (OS3.INET)
+
+1. Preparación del sistema
+--------------------------
+hostnamectl set-hostname SO3.inet
+echo "192.168.0.210  SO3-DOM  SO3.inet" >> /etc/hosts
+dnf -y update
+dnf -y install epel-release
+dnf config-manager --set-enabled powertools
+dnf -y install wget tar gcc make python3-devel
+
+2. Descarga e instalación de Samba
+----------------------------------
+mkdir -p /samba && cd /samba
+wget https://download.samba.org/pub/samba/stable/samba-4.16.2.tar.gz
+tar -zxvf samba-4.16.2.tar.gz && cd samba-4.16.2/
+
+dnf -y install docbook-style-xsl python3-markdown bison dbus-devel flex gdb \\
+gnutls-devel jansson-devel keyutils-libs-devel krb5-workstation libacl-devel \\
+libaio-devel libarchive-devel libattr-devel libblkid-devel libtasn1 libtasn1-tools \\
+libxml2-devel libxslt lmdb-devel openldap-devel pam-devel perl perl-ExtUtils-MakeMaker \\
+perl-Parse-Yapp popt-devel python3-cryptography python3-dns python3-gpg python3-devel \\
+readline-devel rpcgen systemd-devel zlib-devel perl-JSON gpgme-devel screen
+
+./configure --prefix=/usr/local/samba --enable-fhs --with-ads --with-systemd
+make -j$(nproc)
+make install
+
+3. Configurar PATH global
+-------------------------
+echo 'export PATH=/usr/local/samba/bin:/usr/local/samba/sbin:$PATH' >> /etc/profile.d/samba.sh
+source /etc/profile.d/samba.sh
+
+4. Eliminar smb.conf anterior si existe
+---------------------------------------
+rm -f /usr/local/samba/etc/samba/smb.conf
+
+5. Provisión del dominio
+------------------------
+DOMAIN="OS3.INET"
+DOMAIN_ADMIN="Administrator"
+DOMAIN_PASS="Rae123456!"
+
+samba-tool domain provision --use-rfc2307 \\
+--realm=${DOMAIN} \\
+--domain=${DOMAIN%%.*} \\
+--server-role=dc \\
+--dns-backend=SAMBA_INTERNAL \\
+--adminpass=${DOMAIN_PASS}
+
+6. Configuración de Kerberos
+----------------------------
+cp /usr/local/samba/private/krb5.conf /etc/krb5.conf
+kinit ${DOMAIN_ADMIN}
+klist
+
+7. Configuración del servicio systemd
+-------------------------------------
+cat > /etc/systemd/system/samba.service <<EOF
+[Unit]
+Description=Samba Active Directory Domain Controller
+After=network.target remote-fs.target nss-lookup.target
+
+[Service]
+Type=forking
+ExecStart=/usr/local/samba/sbin/samba -D
+PIDFile=/usr/local/samba/var/run/samba.pid
+ExecReload=/bin/kill -HUP \\$MAINPID
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now samba
+
+8. Configuración del Firewall
+-----------------------------
+firewall-cmd --permanent --add-service={ldap,ldaps,kerberos,dns}
+firewall-cmd --permanent --add-port={53,88,135,139,389,445,464,636,3268,3269}/tcp
+firewall-cmd --permanent --add-port={53,88,123,138,389,464}/udp
+firewall-cmd --reload
+
+9. Configuración de SELinux
+---------------------------
+setsebool -P samba_domain_controller on
+setsebool -P samba_enable_home_dirs on
+
+10. Configuración de DNS y resolución de nombres
+------------------------------------------------
+samba-tool dns query localhost ${DOMAIN} @ ALL
+samba-tool dns zonecreate localhost 0.168.192.in-addr.arpa
+
+echo "nameserver 127.0.0.1" > /etc/resolv.conf
+echo "search ${DOMAIN}" >> /etc/resolv.conf
+chattr +i /etc/resolv.conf
+
+11. Verificaciones y pruebas
+----------------------------
+systemctl status samba
+samba-tool domain level show
+samba-tool drs showrepl
+samba-tool user list
+smbclient -L localhost -U ${DOMAIN_ADMIN}
+host -t SRV _ldap._tcp.${DOMAIN}
+
+
